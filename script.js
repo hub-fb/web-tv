@@ -153,20 +153,32 @@ function renderizarCanais() {
         return;
     }
 
+    // SVG Base64 limpo para evitar conflito de aspas duplas no HTML do item
+    const imgPlaceholder = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2'><rect x='2' y='2' width='20' height='20' rx='2.18' ry='2.18'></rect><line x1='7' y1='2' x2='7' y2='22'></line><line x1='17' y1='2' x2='17' y2='22'></line><line x1='2' y1='12' x2='22' y2='12'></line></svg>";
+
     canaisFiltrados.forEach(canal => {
         const item = document.createElement('div');
         item.className = 'channel-item';
         if (DOM.video.dataset.currentUrl === canal.url) item.classList.add('active');
 
-        const imgPlaceholder = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="%239ca3af" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect><line x1="7" y1="2" x2="7" y2="22"></line><line x1="17" y1="2" x2="17" y2="22"></line><line x1="2" y1="12" x2="22" y2="12"></line></svg>';
+        // Determina o logo final ou usa o placeholder de forma segura
+        const logoSrc = canal.logo ? canal.logo.trim() : imgPlaceholder;
 
+        // Montagem do HTML protegida contra vazamento de strings
         item.innerHTML = `
-            <img class="channel-logo" src="${canal.logo || imgPlaceholder}" onerror="this.src='${imgPlaceholder}'" alt="">
+            <img class="channel-logo" src="${logoSrc}" alt="">
             <div class="channel-info">
                 <div class="channel-name">${canal.nome}</div>
                 <div class="channel-group">${canal.grupo}</div>
             </div>
         `;
+
+        // Tratamento de erro caso o link do logo falhe/esteja quebrado
+        const imgElement = item.querySelector('.channel-logo');
+        imgElement.onerror = function() {
+            this.src = imgPlaceholder;
+            this.onerror = null; // Evita loop infinito se o próprio placeholder falhar
+        };
 
         item.addEventListener('click', () => carregarCanalNoPlayer(canal));
         DOM.channelsList.appendChild(item);
