@@ -1,6 +1,6 @@
-# Bassetti TV 📺
+# PLAYER TV 📺
 
-O **Bassetti TV** é o frontend do ecossistema IPTV Bassetti. Ele foi projetado para consumir diretamente a lista estruturada e higienizada `ListaIPTV.m3u` gerada pelo projeto de backend **Bassetti IPTV Hub**.
+O **PLAYER TV** foi projetado para consumir diretamente uma lista estruturada e higienizada `.m3u` gerada pelo projeto.
 
 Construído inteiramente em HTML5, CSS3 e JavaScript puro (Vanilla), sem dependência de frameworks complexos, garantindo carregamento ultrarrápido e hospedagem estática direta no **GitHub Pages**.
 
