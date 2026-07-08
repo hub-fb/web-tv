@@ -77,24 +77,24 @@ function parseM3U(dadosBrutos) {
     let canalAtual = null;
 
     for (let i = 0; i < linhas.length; i++) {
-        let linha = linhas[i].trim();
+        let line = linhas[i].trim();
         
-        if (linha.startsWith('#EXTINF:')) {
+        if (line.startsWith('#EXTINF:')) {
             canalAtual = {};
             
             // Regex para captura das chaves/atributos M3U
-            const logoMatch = linha.match(/tvg-logo="([^"]*)"/);
-            const groupMatch = linha.match(/group-title="([^"]*)"/);
+            const logoMatch = line.match(/tvg-logo="([^"]*)"/);
+            const groupMatch = line.match(/group-title="([^"]*)"/);
             
             // O nome do canal vem logo após a última vírgula do #EXTINF
-            const virgulaIndex = linha.lastIndexOf(',');
-            const nomeCanal = virgulaIndex !== -1 ? linha.substring(virgulaIndex + 1).stripOrNormal() : "Canal Sem Nome";
+            const virgulaIndex = line.lastIndexOf(',');
+            const nomeCanal = virgulaIndex !== -1 ? line.substring(virgulaIndex + 1).stripOrNormal() : "Canal Sem Nome";
 
             canalAtual.nome = nomeCanal;
             canalAtual.logo = logoMatch ? logoMatch[1] : '';
             canalAtual.grupo = groupMatch ? groupMatch[1].toUpperCase() : 'OUTROS';
-        } else if (linha && !linha.startsWith('#') && canalAtual) {
-            canalAtual.url = linha;
+        } else if (line && !line.startsWith('#') && canalAtual) {
+            canalAtual.url = line;
             totalCanais.push(canalAtual);
             canalAtual = null; // Reseta ponteiro
         }
@@ -219,34 +219,74 @@ function carregarCanalNoPlayer(canal) {
     // Salva no Histórico
     gerenciarHistorico(canal.url);
 
-    // Gerenciamento de Engine HLS.js
-    if (Hls.isSupported()) {
-        if (hlsInstance) hlsInstance.destroy(); // Libera buffer anterior
-        
-        hlsInstance = new Hls({
-            maxBufferLength: 10,
-            enableWorker: true
-        });
-        hlsInstance.loadSource(canal.url);
-        hlsInstance.attachMedia(DOM.video);
-        hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
-            DOM.video.play();
-        });
-        hlsInstance.on(Hls.Events.ERROR, function (evento, dados) {
-            if (dados.fatal) {
-                atualizarStatus(`Erro de rede ou mídia ao abrir: ${canal.nome}`);
-            }
-        });
-    } 
-    // Suporte Nativo (Apple Safari / iOS Safari)
-    else if (DOM.video.canPlayType('application/vnd.apple.mpegurl')) {
-        DOM.video.src = canal.url;
-        DOM.video.addEventListener('loadedmetadata', () => {
-            DOM.video.play();
-        });
+    // 1. Libera instâncias anteriores da biblioteca HLS se houver
+    if (hlsInstance) {
+        hlsInstance.destroy();
+        hlsInstance = null;
     }
+    
+    // Reseta atributos estruturais da tag video para evitar heranças impeditivas
+    DOM.video.removeAttribute('src');
+    DOM.video.type = ""; 
 
-    atualizarStatus(`Transmitindo agora: ${canal.nome}`);
+    // 2. DETECTOR DE ÁUDIO/RÁDIO UNIVERSAL
+    const urlNormalizada = canal.url.toLowerCase();
+    const isRadio = canal.grupo === "RADIOS" || urlNormalizada.includes("zeno.fm") || urlNormalizada.includes("zenofm.com");
+
+    if (isRadio) {
+        // Correção de Mixed Content: Garante HTTPS no navegador para evitar bloqueios de segurança
+        let urlSegura = canal.url.replace("http://", "https://");
+        
+        // Limpa os sufixos estáticos exigidos pelo Televizo para que o motor HTML5 interprete como stream bruto
+        if (urlSegura.endsWith("/playlist.m3u8")) {
+            urlSegura = urlSegura.replace("/playlist.m3u8", "");
+        } else if (urlSegura.endsWith(".m3u8") || urlSegura.endsWith(".m3u")) {
+            urlSegura = urlSegura.substring(0, urlSegura.lastIndexOf('.'));
+        }
+        
+        if (urlSegura.endsWith("/live")) {
+            urlSegura = urlSegura.replace("/live", "");
+        }
+
+        // Força a tag de vídeo a decodificar a transmissão estritamente como áudio contínuo
+        DOM.video.type = "audio/mpeg";
+        DOM.video.src = urlSegura;
+        
+        DOM.video.play()
+            .then(() => atualizarStatus(`Transmitindo rádio: ${canal.nome}`))
+            .catch(erro => {
+                console.error("Erro na execução da rádio:", erro);
+                atualizarStatus(`Erro de rede ou mídia ao abrir rádio: ${canal.nome}`);
+            });
+            
+    } else {
+        // 3. FLUXO PADRÃO (Canais de TV por assinatura / Vídeos via HLS.js)
+        if (Hls.isSupported()) {
+            hlsInstance = new Hls({
+                maxBufferLength: 10,
+                enableWorker: true
+            });
+            hlsInstance.loadSource(canal.url);
+            hlsInstance.attachMedia(DOM.video);
+            hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
+                DOM.video.play();
+            });
+            hlsInstance.on(Hls.Events.ERROR, function (evento, dados) {
+                if (dados.fatal) {
+                    atualizarStatus(`Erro de rede ou mídia ao abrir: ${canal.nome}`);
+                }
+            });
+        } 
+        // Suporte Nativo (Apple Safari / ecossistema iOS)
+        else if (DOM.video.canPlayType('application/vnd.apple.mpegurl')) {
+            DOM.video.src = canal.url;
+            DOM.video.addEventListener('loadedmetadata', () => {
+                DOM.video.play();
+            });
+        }
+        
+        atualizarStatus(`Transmitindo agora: ${canal.nome}`);
+    }
 }
 
 // Funções Helpers e Armazenamentos Locais
